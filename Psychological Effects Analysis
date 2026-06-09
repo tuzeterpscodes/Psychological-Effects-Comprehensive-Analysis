@@ -1,0 +1,98 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import seaborn as sns
+import warnings
+
+# 1. Setup & Data Loading
+warnings.filterwarnings("ignore")
+try:
+    df = pd.read_csv('psyco.csv')
+    
+    # --- DATA PREP & MAPPING ---
+    scale_map = {-1.0: "Much Worse", -0.5: "Worse", 0.0: "No Change", 0.5: "Better", 1.0: "Much Better"}
+    env_map = {1: "Home", 2: "Office", 3: "Mixed", 4: "Other", 5: "None"}
+    
+    df['sleep_bal_label'] = df['sleep_bal'].map(scale_map)
+    df['env_label'] = df['home_env'].map(env_map)
+    df['relax_label'] = df['relaxed'].map(scale_map)
+    
+    order_list = ["Much Worse", "Worse", "No Change", "Better", "Much Better"]
+    gender_hot_palette = {"Male": "#ff0055", "Female": "#00d4ff", "Prefer not to say": "#00ff88"}
+
+    # --- KPI CALCULATIONS ---
+    total_responses = len(df)
+    main_occupation = df['occupation'].mode()[0].upper()
+    positive_prod = ((df['prod_inc'] >= 0).sum() / total_responses) * 100
+    avg_age_group = df['age'].mode()[0]
+
+    # 2. Visual Style Setup
+    plt.style.use('dark_background')
+    BG_COLOR, CARD_COLOR, BORDER_COLOR = '#0d1117', '#161b22', '#30363d'
+    
+    # Increased height to 36 to allow for more vertical padding
+    fig = plt.figure(figsize=(24, 36), facecolor=BG_COLOR)
+    # Increased hspace to 8.0 and wspace to 0.45 for more "breathing room"
+    gs = gridspec.GridSpec(60, 2, figure=fig, hspace=8.0, wspace=0.45)
+
+    # --- MAIN HEADER ---
+    fig.text(0.5, 0.96, 'PSYCHOLOGICAL EFFECTS COMPREHENSIVE ANALYSIS', fontsize=28, fontweight='bold', color='white', ha='center')
+    fig.text(0.5, 0.945, f'Data Analyst: Artur Montovani ', fontsize=12, color='#8b949e', ha='center', style='italic')
+
+    # --- 1. KPI HEADER ---
+    kpis = [(f"{total_responses}", "PARTICIPANTS", "white"), (main_occupation[:13], "TOP ROLE", "#00d4ff"), 
+            (f"{positive_prod:.1f}%", "STABLE PROD.", "#00ff88"), (avg_age_group, "CORE AGE", "#ffff00")]
+
+    for i, (val, label, col) in enumerate(kpis):
+        ax_card = fig.add_axes([0.06 + (i*0.23), 0.88, 0.20, 0.05], facecolor=CARD_COLOR)
+        for spine in ax_card.spines.values(): spine.set_edgecolor(BORDER_COLOR)
+        ax_card.text(0.5, 0.65, val, color=col, fontsize=22, ha='center', fontweight='bold')
+        ax_card.text(0.5, 0.35, label, color='#8b949e', fontsize=10, ha='center', fontweight='bold')
+        ax_card.set_xticks([]); ax_card.set_yticks([])
+
+    # --- ROW 1 (Age & Occupation) ---
+    ax1 = fig.add_subplot(gs[8:22, 0], facecolor=BG_COLOR)
+    age_data = df['age'].value_counts().head(5)
+    ax1.pie(age_data, labels=age_data.index, autopct='%1.1f%%', startangle=140, 
+            colors=sns.color_palette("magma", 5), wedgeprops={'width': 0.75, 'edgecolor': BG_COLOR}, 
+            textprops={'fontsize': 12, 'fontweight': 'bold'})
+    ax1.set_title('DEMOGRAPHIC SPREAD', fontweight='bold', color='#00ff88', fontsize=16, pad=20)
+
+    ax2 = fig.add_subplot(gs[8:22, 1], facecolor=CARD_COLOR)
+    sns.countplot(data=df, y='occupation', hue='occupation', palette='viridis', ax=ax2, order=df['occupation'].value_counts().index[:7], legend=False)
+    ax2.set_title('OCCUPATION DENSITY', fontweight='bold', color='#00d4ff', fontsize=14, pad=20)
+    ax2.set_xlabel(''); ax2.set_ylabel('')
+
+    # --- ROW 2 (Environment & Work Time) ---
+    ax3 = fig.add_subplot(gs[28:40, 0], facecolor=CARD_COLOR)
+    pivot_data = df.pivot_table(index='env_label', columns='relax_label', values='age', aggfunc='count').fillna(0)
+    pivot_data = pivot_data.reindex(columns=order_list)
+    sns.heatmap(pivot_data, annot=True, fmt='.0f', cmap='Reds', ax=ax3, cbar=False, annot_kws={"size": 12})
+    ax3.set_title('ENV. VS RELAXATION', fontweight='bold', color='#ff4d6d', fontsize=14, pad=20)
+    ax3.set_xlabel(''); ax3.set_ylabel('')
+    plt.setp(ax3.get_yticklabels(), rotation=0, fontsize=10)
+
+    ax4 = fig.add_subplot(gs[28:40, 1], facecolor=CARD_COLOR)
+    sns.barplot(data=df, x='time_bp', y='occupation', hue='occupation', palette='flare', ax=ax4, errorbar=None, legend=False)
+    ax4.set_title('AVG WORK TIME (PRE-PANDEMIC)', fontweight='bold', color='#ffff00', fontsize=14, pad=20)
+    ax4.set_xlabel('Hours (Average)', fontsize=10); ax4.set_ylabel('')
+
+    # --- ROW 3 (Gender Trends) ---
+    ax5 = fig.add_subplot(gs[46:58, 0], facecolor=CARD_COLOR)
+    sns.countplot(data=df, x='new_skill', hue='gender', palette=gender_hot_palette, ax=ax5)
+    ax5.set_title('SKILLS BY GENDER', fontweight='bold', color='#00ff88', fontsize=14, pad=20)
+    ax5.set_xlabel('Learned New Skill?', fontsize=10); ax5.set_ylabel('')
+    ax5.legend(title='Gender', loc='upper left', bbox_to_anchor=(1, 1), frameon=False, fontsize=10)
+
+    ax6 = fig.add_subplot(gs[46:58, 1], facecolor=CARD_COLOR)
+    sns.countplot(data=df, x='sleep_bal_label', hue='gender', palette='pastel', ax=ax6, order=order_list)
+    ax6.set_title('SLEEP TRENDS BY GENDER', fontweight='bold', color='#ffa500', fontsize=14, pad=20)
+    ax6.set_xlabel(''); ax6.set_ylabel('')
+    ax6.legend(title='Gender', loc='upper left', bbox_to_anchor=(1, 1), frameon=False, fontsize=10)
+
+    # Final Adjustment to remove excess whitespace at the bottom
+    plt.subplots_adjust(bottom=0.08, top=0.92, left=0.06, right=0.88)
+    plt.show()
+
+except Exception as e:
+    print(f"Error: {e}")
